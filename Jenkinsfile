@@ -1,113 +1,104 @@
-// This pipeline automates the build and deployment of a full-stack application
-// with a React frontend and a Spring Boot backend.
+// Jenkins pipeline for FoodRecipe project
+// React frontend + Spring Boot backend → deployed on Tomcat
 pipeline {
-    // Uses any available Jenkins agent to run the build.
     agent any
 
-    // Defines the tools required for the build, matching the names configured in Jenkins.
     tools {
         jdk 'JDK_HOME'
         maven 'MAVEN_HOME'
+        nodejs 'NODE_HOME'
     }
 
-    // Defines environment variables for the pipeline, making the script more maintainable.
     environment {
-        // Tomcat details for deployment.
-        TOMCAT_URL = 'http://localhost:9090/manager/text'
-        TOMCAT_USER = 'BhanuPrakash-16'
-        TOMCAT_PASS = 'Bhanu#2006'
-
-        // Repository and project directories.
-        REPO_URL = 'https://github.com/BhanuPrakash-16/FoodRecipe_Jenkins.git'
+        GIT_REPO = 'https://github.com/BhanuPrakash-16/FoodRecipe_Jenkins.git'
+        BRANCH = 'main'
         BACKEND_DIR = 'backend/foodrecipe-backend'
         FRONTEND_DIR = 'frontend/foodrecipe-frontend'
+        TOMCAT_USER = 'BhanuPrakash-16'
+        TOMCAT_PASS = 'Bhanu#2006'
+        TOMCAT_URL  = 'http://localhost:9090'
+    }
 
-        // Corrected WAR file paths with the proper spelling and context path.
-        // This is important for Tomcat's deployment manager.
-        BACKEND_WAR = 'backend/foodrecipe-backend/target/foodrecipe.war'
-        FRONTEND_WAR = 'frontend/foodrecipe-frontend/FoodRecipe.war'
+    options {
+        timestamps()
     }
 
     stages {
-        // Stage 1: Clones the Git repository.
-        stage('Clone Repository') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: "${env.REPO_URL}"
+                git branch: "${BRANCH}", url: "${GIT_REPO}"
             }
         }
 
-        // Stage 2: Installs dependencies and builds the React frontend.
-        stage('Build React Frontend') {
+        stage('Build Backend') {
             steps {
-                script {
-                    // Ensures the Node.js path is correctly set.
-                    def nodeHome = tool name: 'NODE_HOME', type: 'jenkins.plugins.nodejs.tools.NodeJSInstallation'
-                    env.PATH = "${nodeHome}\\bin;${env.PATH}"
-                }
-                dir("${env.FRONTEND_DIR}") {
-                    // Installs npm dependencies and runs the build command.
-                    bat 'npm install'
-                    bat 'npm run build'
+                dir("${BACKEND_DIR}") {
+                    sh "mvn clean package -DskipTests"
+                    // Rename WAR → foodrecipie.war for Tomcat context
+                    sh "mv target/*.war target/foodrecipie.war"
                 }
             }
         }
 
-        // Stage 3: Packages the built React app into a .war file.
-        // This stage is necessary to deploy a frontend application to a servlet container like Tomcat.
-        stage('Package React as WAR') {
+        stage('Build Frontend') {
+            steps {
+                dir("${FRONTEND_DIR}") {
+                    sh "npm install"
+                    sh "npm run build"
+                }
+            }
+        }
+
+        stage('Package Frontend as WAR') {
             steps {
                 script {
-                    def warDir = "${env.FRONTEND_DIR}\\war_content"
-                    bat """
-                        // Cleans up previous WAR content and creates new directories.
-                        if exist "${warDir}" rmdir /S /Q "${warDir}"
-                        mkdir "${warDir}\\META-INF"
-                        mkdir "${warDir}\\WEB-INF"
-                        // Copies the built files from the 'build' directory to the WAR content directory.
-                        // Corrected from 'dist' to 'build' as it's the default output for 'npm run build'.
-                        xcopy /E /Y /I "${env.FRONTEND_DIR}\\build\\*" "${warDir}\\"
-                        // Creates the WAR file.
-                        jar -cvf "${env.FRONTEND_WAR}" -C "${warDir}" .
+                    def warDir = "${FRONTEND_DIR}/war_content"
+                    def warName = "${FRONTEND_DIR}/target/FoodRecipe.war"
+
+                    sh "rm -rf ${warDir} ${FRONTEND_DIR}/target"
+                    sh "mkdir -p ${warDir}/WEB-INF ${warDir}/META-INF ${FRONTEND_DIR}/target"
+
+                    // Copy React build output
+                    sh "cp -r ${FRONTEND_DIR}/build/* ${warDir}/"
+
+                    // Create WAR
+                    sh "jar -cvf ${warName} -C ${warDir} ."
+
+                    archiveArtifacts artifacts: "${FRONTEND_DIR}/target/FoodRecipe.war", fingerprint: true
+                }
+            }
+        }
+
+        stage('Deploy Backend to Tomcat') {
+            steps {
+                script {
+                    def warFile = "${BACKEND_DIR}/target/foodrecipie.war"
+                    sh """
+                        curl -u ${TOMCAT_USER}:${TOMCAT_PASS} --upload-file ${warFile} \\
+                        "${TOMCAT_URL}/manager/text/deploy?path=/foodrecipie&update=true"
                     """
                 }
             }
         }
 
-        // Stage 4: Builds the Spring Boot backend using Maven.
-        stage('Build Spring Boot Backend') {
+        stage('Deploy Frontend to Tomcat') {
             steps {
-                dir("${env.BACKEND_DIR}") {
-                    // Cleans and packages the backend, skipping tests for a faster build.
-                    bat 'mvn clean package -DskipTests'
-                    // Corrected WAR file name to 'foodrecipe.war'.
-                    bat 'rename target\\*.war foodrecipe.war'
+                script {
+                    def frontendWar = "${FRONTEND_DIR}/target/FoodRecipe.war"
+                    sh """
+                        curl -u ${TOMCAT_USER}:${TOMCAT_PASS} --upload-file ${frontendWar} \\
+                        "${TOMCAT_URL}/manager/text/deploy?path=/FoodRecipe&update=true"
+                    """
                 }
-            }
-        }
-
-        // Stage 5: Deploys the backend WAR file to Tomcat.
-        stage('Deploy Backend WAR to Tomcat') {
-            steps {
-                // Uses curl to upload the WAR file to Tomcat's manager.
-                // The 'path' parameter is the context path for the application.
-                bat "curl -u ${env.TOMCAT_USER}:${env.TOMCAT_PASS} --upload-file \"${env.BACKEND_WAR}\" \"${env.TOMCAT_URL}/deploy?path=/foodrecipe&update=true\""
-            }
-        }
-
-        // Stage 6: Deploys the frontend WAR file to Tomcat.
-        stage('Deploy Frontend WAR to Tomcat') {
-            steps {
-                bat "curl -u ${env.TOMCAT_USER}:${env.TOMCAT_PASS} --upload-file \"${env.FRONTEND_WAR}\" \"${env.TOMCAT_URL}/deploy?path=/FoodRecipe&update=true\""
             }
         }
     }
 
-    // Post-build actions, providing status messages.
     post {
         success {
-            echo "✅ Deployment Complete!"
+            echo "✅ Deployment Successful!"
             echo "Frontend → http://localhost:9090/FoodRecipe/"
-            echo "Backend → http://localhost:9090/foodrecipe/"
+            echo "Backend  → http://localhost:9090/foodrecipie/"
         }
         failure {
             echo "❌ Deployment Failed!"
