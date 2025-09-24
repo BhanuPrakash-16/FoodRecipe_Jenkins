@@ -6,10 +6,14 @@ pipeline {
         jdk 'Java21'
     }
 
+    environment {
+        TOMCAT_HOME = '/path/to/tomcat'  // Change to your local Tomcat folder
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/YourUser/FoodRecipe_Jenkins.git'
+                git branch: 'main', url: 'https://github.com/BhanuPrakash-16/FoodRecipe_Jenkins.git'
             }
         }
 
@@ -33,23 +37,20 @@ pipeline {
 
         stage('Deploy to Tomcat') {
             steps {
-                // Backend WAR
-                sh 'sudo cp backend/foodrecipe-backend/target/foodrecipie.war /var/lib/tomcat9/webapps/'
-
-                // Frontend WAR
-                sh 'sudo cp frontend/foodrecipe-frontend/FoodRecipe.war /var/lib/tomcat9/webapps/'
+                sh "cp backend/foodrecipe-backend/target/foodrecipie.war $TOMCAT_HOME/webapps/"
+                sh "cp frontend/foodrecipe-frontend/FoodRecipe.war $TOMCAT_HOME/webapps/"
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment Successful!"
-            echo "Frontend → http://<server-ip>:8080/FoodRecipe/"
-            echo "Backend → http://<server-ip>:8080/foodrecipie/"
+            echo "✅ Deployment Complete!"
+            echo "Frontend → http://localhost:9090/FoodRecipe/"
+            echo "Backend → http://localhost:9090/foodrecipie/"
         }
         failure {
-            echo "❌ Deployment Failed! Check Jenkins logs."
+            echo "❌ Deployment Failed!"
         }
     }
 }
