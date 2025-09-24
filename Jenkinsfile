@@ -63,8 +63,9 @@ pipeline {
                         if exist "${warDir}" rmdir /S /Q "${warDir}"
                         mkdir "${warDir}\\META-INF"
                         mkdir "${warDir}\\WEB-INF"
-                        // Copies the built files from the 'dist' directory to the WAR content directory.
-                        xcopy /E /Y /I "${env.FRONTEND_DIR}\\dist\\*" "${warDir}\\"
+                        // Copies the built files from the 'build' directory to the WAR content directory.
+                        // Corrected from 'dist' to 'build' as it's the default output for 'npm run build'.
+                        xcopy /E /Y /I "${env.FRONTEND_DIR}\\build\\*" "${warDir}\\"
                         // Creates the WAR file.
                         jar -cvf "${env.FRONTEND_WAR}" -C "${warDir}" .
                     """
