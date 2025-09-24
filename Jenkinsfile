@@ -1,5 +1,3 @@
-// Jenkins pipeline for FoodRecipe project
-// React frontend + Spring Boot backend → deployed on Tomcat
 pipeline {
     agent any
 
@@ -17,24 +15,20 @@ pipeline {
         TOMCAT_USER = 'BhanuPrakash-16'
         TOMCAT_PASS = 'Bhanu#2006'
         TOMCAT_URL = 'http://localhost:9090'
+        FRONTEND_WAR = 'FoodRecipe.war' // Define frontend WAR name
     }
 
-    options {
-        timestamps()
-    }
+    options { timestamps() }
 
     stages {
         stage('Checkout Code') {
-            steps {
-                git branch: "${BRANCH}", url: "${GIT_REPO}"
-            }
+            steps { git branch: "${BRANCH}", url: "${GIT_REPO}" }
         }
 
         stage('Build Backend') {
             steps {
                 dir("${BACKEND_DIR}") {
                     bat "mvn clean package -DskipTests"
-                    // Rename WAR → foodrecipie.war for Tomcat context
                     bat "rename target\\*.war foodrecipie.war"
                 }
             }
@@ -53,24 +47,22 @@ pipeline {
             steps {
                 script {
                     def warDir = "${FRONTEND_DIR}\\war_content"
-                    def warName = "FoodRecipe.war"
 
                     // Cleanup previous WAR content
                     bat "if exist \"${warDir}\" rmdir /s /q \"${warDir}\""
                     bat "mkdir \"${warDir}\\WEB-INF\""
                     bat "mkdir \"${warDir}\\META-INF\""
 
-                    // Copy Vite build output directly to the WAR content directory
+                    // Copy Vite build output
                     bat "xcopy /E /Y /I \"${FRONTEND_DIR}\\dist\\*\" \"${warDir}\""
-                    
-                    // Correctly create WAR from the war_content directory
-                    // This ensures the JAR command packages the files with the correct relative paths
+
+                    // Create WAR
                     dir(warDir) {
-                        bat "jar -cvf ..\\target\\%warName% ."
+                        bat "jar -cvf ..\\target\\${env.FRONTEND_WAR} ."
                     }
 
-                    // Archive artifact in Jenkins
-                    archiveArtifacts artifacts: "${FRONTEND_DIR}\\target\\%warName%", fingerprint: true
+                    // Archive WAR in Jenkins
+                    archiveArtifacts artifacts: "${FRONTEND_DIR}\\target\\${env.FRONTEND_WAR}", fingerprint: true
                 }
             }
         }
@@ -90,7 +82,7 @@ pipeline {
         stage('Deploy Frontend to Tomcat') {
             steps {
                 script {
-                    def frontendWar = "${FRONTEND_DIR}\\target\\FoodRecipe.war"
+                    def frontendWar = "${FRONTEND_DIR}\\target\\${env.FRONTEND_WAR}"
                     bat """
                         curl -u ${TOMCAT_USER}:${TOMCAT_PASS} --upload-file "${frontendWar}" ^
                         "${TOMCAT_URL}/manager/text/deploy?path=/FoodRecipe&update=true"
@@ -106,8 +98,6 @@ pipeline {
             echo "Frontend → http://localhost:9090/FoodRecipe/"
             echo "Backend → http://localhost:9090/foodrecipie/"
         }
-        failure {
-            echo "❌ Deployment Failed!"
-        }
+        failure { echo "❌ Deployment Failed!" }
     }
 }
