@@ -60,14 +60,17 @@ pipeline {
                     bat "mkdir \"${warDir}\\WEB-INF\""
                     bat "mkdir \"${warDir}\\META-INF\""
 
-                    // Copy Vite build output
+                    // Copy Vite build output directly to the WAR content directory
                     bat "xcopy /E /Y /I \"${FRONTEND_DIR}\\dist\\*\" \"${warDir}\""
-
-                    // Create WAR
-                    bat "jar -cvf ${warName} -C ${warDir} ."
+                    
+                    // Correctly create WAR from the war_content directory
+                    // This ensures the JAR command packages the files with the correct relative paths
+                    dir(warDir) {
+                        bat "jar -cvf ..\\target\\%warName% ."
+                    }
 
                     // Archive artifact in Jenkins
-                    archiveArtifacts artifacts: warName, fingerprint: true
+                    archiveArtifacts artifacts: "${FRONTEND_DIR}\\target\\%warName%", fingerprint: true
                 }
             }
         }
@@ -87,7 +90,7 @@ pipeline {
         stage('Deploy Frontend to Tomcat') {
             steps {
                 script {
-                    def frontendWar = "FoodRecipe.war"
+                    def frontendWar = "${FRONTEND_DIR}\\target\\FoodRecipe.war"
                     bat """
                         curl -u ${TOMCAT_USER}:${TOMCAT_PASS} --upload-file "${frontendWar}" ^
                         "${TOMCAT_URL}/manager/text/deploy?path=/FoodRecipe&update=true"
