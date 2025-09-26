@@ -52,12 +52,12 @@ pipeline {
                     def warDir = "${FRONTEND_DIR}\\war_content"
                     def warName = "FoodRecipe.war"
 
-                    // Cleanup previous WAR content
+                    // Clean previous WAR content
                     bat "if exist \"${warDir}\" rmdir /s /q \"${warDir}\""
                     bat "mkdir \"${warDir}\\WEB-INF\""
                     bat "mkdir \"${warDir}\\META-INF\""
 
-                    // Add minimal web.xml to avoid Tomcat errors
+                    // Add minimal web.xml
                     writeFile file: "${warDir}\\WEB-INF\\web.xml", text: '''
 <web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
          version="3.1">
@@ -67,13 +67,13 @@ pipeline {
                     // Copy Vite build output
                     bat "xcopy /E /Y /I \"${FRONTEND_DIR}\\dist\\*\" \"${warDir}\""
 
-                    // Create WAR
-                    bat "jar -cvf ${warName} -C ${warDir} ."
+                    // Create WAR using jar command
+                    bat "jar -cvf \"${FRONTEND_DIR}\\${warName}\" -C \"${warDir}\" ."
 
-                    // Move WAR to workspace root for deployment
-                    bat "move ${FRONTEND_DIR}\\${warName} ."
+                    // Move WAR to Jenkins workspace root
+                    bat "move \"${FRONTEND_DIR}\\${warName}\" ."
 
-                    // Archive artifact in Jenkins
+                    // Archive for visibility
                     archiveArtifacts artifacts: warName, fingerprint: true
                 }
             }
