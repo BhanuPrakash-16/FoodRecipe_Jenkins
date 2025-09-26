@@ -1,5 +1,3 @@
-// Jenkins pipeline for FoodRecipe project
-// React frontend + Spring Boot backend → deployed on Tomcat
 pipeline {
     agent any
 
@@ -34,7 +32,6 @@ pipeline {
             steps {
                 dir("${BACKEND_DIR}") {
                     bat "mvn clean package -DskipTests"
-                    // Rename WAR → foodrecipie.war for Tomcat context
                     bat "rename target\\*.war foodrecipie.war"
                 }
             }
@@ -60,11 +57,21 @@ pipeline {
                     bat "mkdir \"${warDir}\\WEB-INF\""
                     bat "mkdir \"${warDir}\\META-INF\""
 
+                    // Add minimal web.xml to avoid Tomcat errors
+                    writeFile file: "${warDir}\\WEB-INF\\web.xml", text: '''
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+         version="3.1">
+</web-app>
+'''.stripIndent()
+
                     // Copy Vite build output
                     bat "xcopy /E /Y /I \"${FRONTEND_DIR}\\dist\\*\" \"${warDir}\""
 
                     // Create WAR
                     bat "jar -cvf ${warName} -C ${warDir} ."
+
+                    // Move WAR to workspace root for deployment
+                    bat "move ${FRONTEND_DIR}\\${warName} ."
 
                     // Archive artifact in Jenkins
                     archiveArtifacts artifacts: warName, fingerprint: true
